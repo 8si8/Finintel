@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="theme-color" content="#0a0e1a"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="FinIntel"/>
+  <meta name="description" content="AI-powered financial intelligence & trade recommendations"/>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="icon" href="icon-192.png"/>
+  <title>FinIntel — AI Trade Terminal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Exo+2:wght@300;400;600;700;900&display=swap" rel="stylesheet"/>
+  <script type="importmap">
+    { "imports": { "@google/generative-ai": "https://esm.run/@google/generative-ai" } }
+  </script>
+
+  <style>
+    /* ── Reset & Tokens ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg0:       #050810;
+      --bg1:       #0a0e1a;
+      --bg2:       #0f1525;
+      --bg3:       #151d30;
+      --bg4:       #1c2540;
+      --border:    #1e2d4a;
+      --border2:   #253450;
+      --accent:    #00d4ff;
+      --accent2:   #0099cc;
+      --gold:      #f0b429;
+      --green:     #00e676;
+      --green2:    #00c853;
+      --red:       #ff3d57;
+      --red2:      #cc0022;
+      --yellow:    #ffeb3b;
+      --purple:    #7c4dff;
+      --text1:     #e8edf5;
+      --text2:     #8fa3c0;
+      --text3:     #4a6080;
+      --font-mono: 'Share Tech Mono', monospace;
+      --font-ui:   'Rajdhani', sans-serif;
+      --font-disp: 'Exo 2', sans-serif;
+      --safe-top:  env(safe-area-inset-top, 0px);
+      --safe-bot:  env(safe-area-inset-bottom, 0px);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg0);
+      color: var(--text1);
+      font-family: var(--font-ui);
+      overflow-x: hidden;
+    }
+
+    /* ── Scanline overlay ───────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.03) 2px,
+        rgba(0,0,0,0.03) 4px
+      );
+    }
+
+    /* ── Grid noise texture ─────────────────────────────────────── */
+    body::after {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(0,212,255,0.04) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 80% at 80% 90%, rgba(124,77,255,0.04) 0%, transparent 60%);
+    }
+
+    /* ── App Shell ──────────────────────────────────────────────── */
+    #app {
+      position: relative; z-index: 1;
+      min-height: 100vh;
+      padding-top: var(--safe-top);
+      padding-bottom: calc(var(--safe-bot) + 70px);
+      display: flex; flex-direction: column;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px 10px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(10,14,26,0.95);
+      backdrop-filter: blur(20px);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo {
+      font-family: var(--font-disp);
+      font-size: 22px; font-weight: 900;
+      letter-spacing: -0.5px;
+      background: linear-gradient(90deg, var(--accent), var(--purple));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .logo span { font-weight: 300; }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .live-badge {
+      display: flex; align-items: center; gap: 5px;
+      font-family: var(--font-mono); font-size: 10px;
+      color: var(--green); letter-spacing: 1px;
+    }
+    .live-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse-dot 1.5s infinite;
+    }
+    @keyframes pulse-dot {
+      0%,100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.4; transform: scale(0.7); }
+    }
+    .settings-btn {
+      width: 36px; height: 36px; border-radius: 8px;
+      background: var(--bg3); border: 1px solid var(--border2);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 16px;
+      transition: background 0.2s;
+    }
+    .settings-btn:active { background: var(--bg4); }
+
+    /* ── Ticker Tape ────────────────────────────────────────────── */
+    .ticker-tape {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      overflow: hidden; height: 32px;
+      display: flex; align-items: center;
+    }
+    .ticker-inner {
+      display: flex; gap: 0; white-space: nowrap;
+      animation: scroll-left 40s linear infinite;
+    }
+    .ticker-tape:hover .ticker-inner { animation-play-state: paused; }
+    @keyframes scroll-left {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    .tick-item {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 0 18px; font-family: var(--font-mono); font-size: 11px;
+      border-right: 1px solid var(--border);
+    }
+    .tick-sym { color: var(--text2); }
+    .tick-price { color: var(--text1); }
+    .tick-chg.up   { color: var(--green); }
+    .tick-chg.down { color: var(--red); }
+
+    /* ── Main Content ────────────────────────────────────────────── */
+    main { flex: 1; padding: 0 0 16px; }
+
+    /* ── Section label ───────────────────────────────────────────── */
+    .section-label {
+      font-family: var(--font-mono); font-size: 10px;
+      letter-spacing: 2px; color: var(--text3);
+      padding: 14px 18px 8px;
+      text-transform: uppercase;
+    }
+
+    /* ── Indicators Grid ─────────────────────────────────────────── */
+    .indicators-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr);
+      gap: 8px; padding: 0 12px;
+    }
+    .indicator-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 12px;
+      position: relative; overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .indicator-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.4;
+    }
+    .ind-name  { font-size: 10px; color: var(--text3); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+    .ind-price { font-family: var(--font-mono); font-size: 16px; color: var(--text1); font-weight: bold; }
+    .ind-chg   { font-family: var(--font-mono); font-size: 12px; margin-top: 2px; }
+    .ind-chg.up   { color: var(--green); }
+    .ind-chg.down { color: var(--red); }
+
+    /* ── Sentiment Bar ───────────────────────────────────────────── */
+    .sentiment-panel {
+      margin: 8px 12px;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px 16px;
+    }
+    .sentiment-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 10px;
+    }
+    .sentiment-title { font-size: 11px; color: var(--text3); letter-spacing: 1px; text-transform: uppercase; }
+    .sentiment-label {
+      font-family: var(--font-disp); font-size: 14px; font-weight: 700;
+    }
+    .sentiment-label.greed  { color: var(--green); }
+    .sentiment-label.fear   { color: var(--red); }
+    .sentiment-label.neutral{ color: var(--yellow); }
+    .sentiment-track {
+      height: 8px; border-radius: 4px;
+      background: linear-gradient(90deg, var(--red2), var(--yellow), var(--green2));
+      position: relative; margin-bottom: 8px;
+    }
+    .sentiment-thumb {
+      position: absolute; top: 50%; transform: translate(-50%, -50%);
+      width: 16px; height: 16px; border-radius: 50%;
+      background: white; border: 2px solid var(--bg0);
+      box-shadow: 0 0 12px rgba(255,255,255,0.5);
+      transition: left 0.8s cubic-bezier(.34,1.56,.64,1);
+    }
+    .sentiment-text {
+      font-size: 12px; color: var(--text2); line-height: 1.5;
+      margin-top: 8px;
+    }
+
+    /* ── Tabs ────────────────────────────────────────────────────── */
+    .tabs {
+      display: flex; gap: 0;
+      margin: 12px 12px 0;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 4px;
+    }
+    .tab {
+      flex: 1; text-align: center; padding: 8px 4px;
+      font-family: var(--font-ui); font-size: 12px; font-weight: 600;
+      color: var(--text3); border-radius: 7px; cursor: pointer;
+      transition: all 0.2s; letter-spacing: 0.5px;
+    }
+    .tab.active {
+      background: var(--bg4); color: var(--accent);
+      box-shadow: 0 0 12px rgba(0,212,255,0.15);
+    }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* ── Trade Cards ─────────────────────────────────────────────── */
+    .trades-list { padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; }
+
+    .trade-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 14px; overflow: hidden;
+      animation: slide-in 0.4s ease both;
+    }
+    @keyframes slide-in {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .trade-card:nth-child(1) { animation-delay: 0.05s; }
+    .trade-card:nth-child(2) { animation-delay: 0.10s; }
+    .trade-card:nth-child(3) { animation-delay: 0.15s; }
+    .trade-card:nth-child(4) { animation-delay: 0.20s; }
+    .trade-card:nth-child(5) { animation-delay: 0.25s; }
+
+    .trade-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .trade-left { display: flex; align-items: center; gap: 10px; }
+    .action-badge {
+      font-family: var(--font-mono); font-size: 11px; font-weight: bold;
+      padding: 4px 10px; border-radius: 6px; letter-spacing: 1px;
+    }
+    .action-badge.buy, .action-badge.call {
+      background: rgba(0,230,118,0.15); color: var(--green); border: 1px solid rgba(0,230,118,0.3);
+    }
+    .action-badge.sell, .action-badge.short, .action-badge.put {
+      background: rgba(255,61,87,0.15); color: var(--red); border: 1px solid rgba(255,61,87,0.3);
+    }
+    .action-badge.hold {
+      background: rgba(255,235,59,0.15); color: var(--yellow); border: 1px solid rgba(255,235,59,0.3);
+    }
+    .trade-ticker {
+      font-family: var(--font-disp); font-size: 18px; font-weight: 900;
+      color: var(--text1);
+    }
+    .trade-name { font-size: 11px; color: var(--text3); margin-top: 1px; }
+    .trade-horizon {
+      font-family: var(--font-mono); font-size: 10px; color: var(--text3);
+      background: var(--bg3); border: 1px solid var(--border);
+      padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1px;
+    }
+
+    .trade-prices {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      padding: 10px 14px; gap: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .price-block { display: flex; flex-direction: column; gap: 2px; }
+    .price-lbl { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; }
+    .price-val { font-family: var(--font-mono); font-size: 13px; }
+    .price-val.entry  { color: var(--accent); }
+    .price-val.target { color: var(--green); }
+    .price-val.stop   { color: var(--red); }
+    .price-gain { font-size: 10px; color: var(--green); margin-top: 1px; }
+
+    .trade-prob {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .prob-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 6px;
+    }
+    .prob-lbl { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; }
+    .prob-num {
+      font-family: var(--font-disp); font-size: 22px; font-weight: 900;
+    }
+    .prob-num.high   { color: var(--green); }
+    .prob-num.medium { color: var(--yellow); }
+    .prob-num.low    { color: var(--red); }
+    .prob-bar-track {
+      height: 6px; border-radius: 3px; background: var(--bg4);
+    }
+    .prob-bar-fill {
+      height: 100%; border-radius: 3px;
+      transition: width 1s cubic-bezier(.34,1.56,.64,1);
+    }
+    .prob-bar-fill.high   { background: linear-gradient(90deg, var(--green2), var(--green)); box-shadow: 0 0 8px var(--green); }
+    .prob-bar-fill.medium { background: linear-gradient(90deg, #e65100, var(--yellow)); }
+    .prob-bar-fill.low    { background: linear-gradient(90deg, var(--red2), var(--red)); }
+    .conf-badge {
+      font-size: 10px; padding: 2px 8px; border-radius: 4px;
+      font-family: var(--font-mono); letter-spacing: 1px;
+    }
+    .conf-badge.High   { background: rgba(0,230,118,0.1); color: var(--green); }
+    .conf-badge.Medium { background: rgba(255,235,59,0.1); color: var(--yellow); }
+    .conf-badge.Low    { background: rgba(255,61,87,0.1);  color: var(--red); }
+
+    .trade-body { padding: 10px 14px; }
+    .trade-reasoning {
+      font-size: 12px; color: var(--text2); line-height: 1.6;
+      margin-bottom: 8px;
+    }
+    .trade-risks {
+      font-size: 11px; color: var(--text3); line-height: 1.5;
+      padding: 8px 10px;
+      background: rgba(255,61,87,0.05); border: 1px solid rgba(255,61,87,0.15);
+      border-radius: 6px;
+    }
+    .trade-risks::before { content: '⚠ '; }
+    .catalysts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .catalyst-tag {
+      font-size: 10px; padding: 3px 8px; border-radius: 4px;
+      background: rgba(0,212,255,0.08); color: var(--accent);
+      border: 1px solid rgba(0,212,255,0.2);
+      font-family: var(--font-mono);
+    }
+
+    /* ── News List ───────────────────────────────────────────────── */
+    .news-list { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+    .news-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 14px;
+      animation: slide-in 0.3s ease both;
+    }
+    .news-source {
+      font-family: var(--font-mono); font-size: 10px; color: var(--accent);
+      text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;
+    }
+    .news-title {
+      font-size: 13px; font-weight: 600; color: var(--text1);
+      line-height: 1.4; margin-bottom: 5px;
+    }
+    .news-summary { font-size: 11px; color: var(--text3); line-height: 1.5; }
+    .news-time { font-family: var(--font-mono); font-size: 10px; color: var(--text3); margin-top: 6px; }
+
+    /* ── Sector Rotation ─────────────────────────────────────────── */
+    .sector-panel {
+      margin: 10px 12px;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px;
+    }
+    .sector-title { font-family: var(--font-mono); font-size: 10px; color: var(--text3); letter-spacing: 2px; margin-bottom: 10px; }
+    .sector-row { display: flex; flex-direction: column; gap: 8px; }
+    .sector-group { display: flex; flex-direction: column; gap: 6px; }
+    .sector-group-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); }
+    .sector-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+    .sector-tag {
+      font-size: 11px; padding: 4px 10px; border-radius: 5px; font-weight: 600;
+    }
+    .sector-tag.over  { background: rgba(0,230,118,0.12); color: var(--green); border: 1px solid rgba(0,230,118,0.25); }
+    .sector-tag.under { background: rgba(255,61,87,0.12);  color: var(--red);   border: 1px solid rgba(255,61,87,0.25); }
+    .sector-rationale { font-size: 11px; color: var(--text3); margin-top: 10px; line-height: 1.5; }
+
+    /* ── Risk Events ─────────────────────────────────────────────── */
+    .risk-panel {
+      margin: 10px 12px;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px;
+    }
+    .risk-title { font-family: var(--font-mono); font-size: 10px; color: var(--text3); letter-spacing: 2px; margin-bottom: 10px; }
+    .risk-list { display: flex; flex-direction: column; gap: 7px; }
+    .risk-item {
+      font-size: 12px; color: var(--text2); padding: 8px 10px;
+      background: rgba(240,180,41,0.05); border: 1px solid rgba(240,180,41,0.15);
+      border-radius: 6px; line-height: 1.4;
+    }
+    .risk-item::before { content: '⚡ '; color: var(--gold); }
+
+    /* ── Scan Button ─────────────────────────────────────────────── */
+    .scan-btn-wrap {
+      padding: 16px 12px 8px;
+      position: sticky; bottom: 70px; z-index: 50;
+    }
+    .scan-btn {
+      width: 100%; padding: 16px;
+      background: linear-gradient(135deg, #00b4d8, #0077b6);
+      border: none; border-radius: 14px;
+      font-family: var(--font-disp); font-size: 16px; font-weight: 700;
+      color: white; letter-spacing: 1px; cursor: pointer;
+      box-shadow: 0 4px 24px rgba(0,180,216,0.35);
+      transition: all 0.2s; position: relative; overflow: hidden;
+    }
+    .scan-btn::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
+    }
+    .scan-btn:active { transform: scale(0.98); box-shadow: 0 2px 12px rgba(0,180,216,0.3); }
+    .scan-btn:disabled {
+      background: var(--bg4); color: var(--text3);
+      box-shadow: none; cursor: not-allowed; transform: none;
+    }
+
+    /* ── Bottom Nav ──────────────────────────────────────────────── */
+    nav.bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+      background: rgba(10,14,26,0.97);
+      backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border);
+      display: flex; padding: 8px 0 calc(8px + var(--safe-bot));
+    }
+    .nav-item {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      gap: 4px; cursor: pointer; padding: 6px;
+      transition: all 0.2s;
+    }
+    .nav-icon { font-size: 20px; }
+    .nav-label { font-size: 9px; color: var(--text3); letter-spacing: 0.5px; }
+    .nav-item.active .nav-label { color: var(--accent); }
+    .nav-item.active .nav-icon  { filter: drop-shadow(0 0 8px var(--accent)); }
+
+    /* ── Settings Modal ──────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,0.8); backdrop-filter: blur(4px);
+      display: flex; align-items: flex-end; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.3s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal-sheet {
+      width: 100%; max-width: 480px;
+      background: var(--bg2); border-top: 1px solid var(--border);
+      border-radius: 20px 20px 0 0;
+      padding: 20px 20px calc(20px + var(--safe-bot));
+      transform: translateY(100%); transition: transform 0.35s cubic-bezier(.34,1.56,.64,1);
+    }
+    .modal-overlay.open .modal-sheet { transform: translateY(0); }
+    .modal-handle {
+      width: 36px; height: 4px; border-radius: 2px;
+      background: var(--border2); margin: 0 auto 20px;
+    }
+    .modal-title {
+      font-family: var(--font-disp); font-size: 18px; font-weight: 700;
+      color: var(--text1); margin-bottom: 20px;
+    }
+    .form-group { margin-bottom: 16px; }
+    .form-label { font-size: 11px; color: var(--text3); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; display: block; }
+    .form-input {
+      width: 100%; padding: 12px 14px;
+      background: var(--bg3); border: 1px solid var(--border2);
+      border-radius: 10px; color: var(--text1);
+      font-family: var(--font-mono); font-size: 13px;
+      outline: none; transition: border-color 0.2s;
+      -webkit-appearance: none;
+    }
+    .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,212,255,0.1); }
+    .form-input::placeholder { color: var(--text3); }
+    .save-btn {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      border: none; border-radius: 10px;
+      font-family: var(--font-disp); font-size: 15px; font-weight: 700;
+      color: var(--bg0); cursor: pointer; margin-top: 4px;
+    }
+    .save-btn:active { opacity: 0.85; }
+
+    /* ── Skeleton Loader ─────────────────────────────────────────── */
+    .skeleton {
+      background: linear-gradient(90deg, var(--bg3) 25%, var(--bg4) 50%, var(--bg3) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 6px;
+    }
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* ── Loading state ───────────────────────────────────────────── */
+    .loading-overlay {
+      display: none; position: fixed; inset: 0; z-index: 300;
+      background: rgba(5,8,16,0.92); backdrop-filter: blur(4px);
+      flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+    }
+    .loading-overlay.visible { display: flex; }
+    .loading-spinner {
+      width: 60px; height: 60px; position: relative;
+    }
+    .spinner-ring {
+      position: absolute; inset: 0; border-radius: 50%;
+      border: 2px solid transparent;
+    }
+    .spinner-ring:nth-child(1) {
+      border-top-color: var(--accent);
+      animation: spin 1s linear infinite;
+    }
+    .spinner-ring:nth-child(2) {
+      border-right-color: var(--purple);
+      animation: spin 1.5s linear infinite reverse;
+      inset: 6px;
+    }
+    .spinner-ring:nth-child(3) {
+      border-bottom-color: var(--green);
+      animation: spin 2s linear infinite;
+      inset: 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text {
+      font-family: var(--font-mono); font-size: 13px; color: var(--accent);
+      letter-spacing: 2px; text-align: center;
+    }
+    .loading-sub { font-size: 11px; color: var(--text3); font-family: var(--font-mono); margin-top: -10px; }
+
+    /* ── Toast ───────────────────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px);
+      z-index: 400; background: var(--bg4); border: 1px solid var(--border2);
+      border-radius: 10px; padding: 10px 18px;
+      font-size: 13px; color: var(--text1);
+      opacity: 0; transition: all 0.3s; white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── Empty state ─────────────────────────────────────────────── */
+    .empty-state {
+      text-align: center; padding: 60px 20px;
+      display: flex; flex-direction: column; align-items: center; gap: 16px;
+    }
+    .empty-icon { font-size: 52px; opacity: 0.3; }
+    .empty-title { font-family: var(--font-disp); font-size: 18px; font-weight: 700; color: var(--text2); }
+    .empty-sub { font-size: 13px; color: var(--text3); line-height: 1.6; max-width: 260px; }
+
+    /* ── Disclaimer ──────────────────────────────────────────────── */
+    .disclaimer {
+      margin: 8px 12px 4px;
+      padding: 10px 12px;
+      background: rgba(255,61,87,0.05); border: 1px solid rgba(255,61,87,0.2);
+      border-radius: 8px;
+      font-size: 10px; color: var(--text3); line-height: 1.5;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <!-- Header -->
+  <header>
+    <div class="logo">Fin<span>Intel</span></div>
+    <div class="header-right">
+      <div class="live-badge">
+        <div class="live-dot"></div>
+        AI POWERED
+      </div>
+      <div class="settings-btn" onclick="openSettings()">⚙️</div>
+    </div>
+  </header>
+
+  <!-- Ticker Tape -->
+  <div class="ticker-tape">
+    <div class="ticker-inner" id="tickerInner">
+      <!-- populated by JS -->
+    </div>
+  </div>
+
+  <!-- Main -->
+  <main id="mainContent">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">📡</div>
+      <div class="empty-title">Ready to Scan</div>
+      <div class="empty-sub">Tap the button below to fetch live market data and generate AI trade recommendations.</div>
+    </div>
+  </main>
+
+  <!-- Scan Button -->
+  <div class="scan-btn-wrap">
+    <button class="scan-btn" id="scanBtn" onclick="runScan()">
+      ⚡ SCAN MARKETS &amp; GENERATE TRADES
+    </button>
+  </div>
+</div>
+
+<!-- Bottom Nav -->
+<nav class="bottom-nav">
+  <div class="nav-item active" onclick="showPage('trades')">
+    <span class="nav-icon">📈</span>
+    <span class="nav-label">TRADES</span>
+  </div>
+  <div class="nav-item" onclick="showPage('news')">
+    <span class="nav-icon">📰</span>
+    <span class="nav-label">NEWS</span>
+  </div>
+  <div class="nav-item" onclick="showPage('market')">
+    <span class="nav-icon">🌐</span>
+    <span class="nav-label">MARKET</span>
+  </div>
+  <div class="nav-item" onclick="showPage('history')">
+    <span class="nav-icon">🕐</span>
+    <span class="nav-label">HISTORY</span>
+  </div>
+</nav>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsModal" onclick="closeSettings(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">⚙ Settings</div>
+    <div class="form-group">
+      <label class="form-label">Google Gemini API Key (Free)</label>
+      <input class="form-input" id="apiKeyInput" type="password" placeholder="AIza..."/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tickers to Watch (comma-separated)</label>
+      <input class="form-input" id="tickersInput" type="text" placeholder="AAPL, MSFT, NVDA, TSLA, SPY"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Max Headlines per Source</label>
+      <input class="form-input" id="headlinesInput" type="number" placeholder="5" min="1" max="15"/>
+    </div>
+    <button class="save-btn" onclick="saveSettings()">Save Settings</button>
+  </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-spinner">
+    <div class="spinner-ring"></div>
+    <div class="spinner-ring"></div>
+    <div class="spinner-ring"></div>
+  </div>
+  <div class="loading-text" id="loadingText">INITIALIZING</div>
+  <div class="loading-sub" id="loadingSub">Connecting to data sources...</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+// ─── State ───────────────────────────────────────────────────────────────────
+let currentPage = 'trades';
+let lastAnalysis = null;
+let lastNews = [];
+let history = JSON.parse(localStorage.getItem('finIntelHistory') || '[]');
+
+// ─── Settings ────────────────────────────────────────────────────────────────
+function getSettings() {
+  return {
+    apiKey:    localStorage.getItem('geminiKey') || '',
+    tickers:   localStorage.getItem('tickers') || 'AAPL,MSFT,NVDA,TSLA,AMZN,META,GOOGL,JPM,SPY,QQQ',
+    headlines: parseInt(localStorage.getItem('headlines') || '5'),
+  };
+}
+function openSettings() {
+  const s = getSettings();
+  document.getElementById('apiKeyInput').value = s.apiKey;
+  document.getElementById('tickersInput').value = s.tickers;
+  document.getElementById('headlinesInput').value = s.headlines;
+  document.getElementById('settingsModal').classList.add('open');
+}
+function closeSettings(e) {
+  if (e.target === document.getElementById('settingsModal')) {
+    document.getElementById('settingsModal').classList.remove('open');
+  }
+}
+function saveSettings() {
+  localStorage.setItem('geminiKey', document.getElementById('apiKeyInput').value.trim());
+  localStorage.setItem('tickers', document.getElementById('tickersInput').value.trim());
+  localStorage.setItem('headlines', document.getElementById('headlinesInput').value || '5');
+  document.getElementById('settingsModal').classList.remove('open');
+  showToast('✅ Settings saved');
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ─── Loading ──────────────────────────────────────────────────────────────────
+const loadingSteps = [
+  ['FETCHING NEWS', 'Scraping Reuters · CNBC · MarketWatch...'],
+  ['FETCHING MARKETS', 'Pulling live market indicators...'],
+  ['FETCHING STOCKS', 'Loading ticker data & fundamentals...'],
+  ['AI ANALYSIS', 'Claude is analyzing market conditions...'],
+  ['GENERATING TRADES', 'Calculating probabilities & entry points...'],
+];
+let loadingInterval = null;
+function showLoading() {
+  document.getElementById('loadingOverlay').classList.add('visible');
+  let i = 0;
+  loadingInterval = setInterval(() => {
+    if (i < loadingSteps.length) {
+      document.getElementById('loadingText').textContent = loadingSteps[i][0];
+      document.getElementById('loadingSub').textContent = loadingSteps[i][1];
+      i++;
+    }
+  }, 2200);
+}
+function hideLoading() {
+  clearInterval(loadingInterval);
+  document.getElementById('loadingOverlay').classList.remove('visible');
+}
+
+// ─── Ticker Tape ──────────────────────────────────────────────────────────────
+const FALLBACK_TICKERS = [
+  {sym:'SPY',  price:487.23, chg:0.42},
+  {sym:'QQQ',  price:421.15, chg:0.68},
+  {sym:'AAPL', price:189.45, chg:-0.31},
+  {sym:'MSFT', price:415.80, chg:0.55},
+  {sym:'NVDA', price:875.20, chg:2.14},
+  {sym:'TSLA', price:184.90, chg:-1.23},
+  {sym:'META', price:521.30, chg:0.89},
+  {sym:'GOOGL',price:163.40, chg:0.12},
+  {sym:'BTC',  price:62400,  chg:1.45},
+  {sym:'GLD',  price:182.50, chg:0.23},
+  {sym:'^VIX', price:14.82,  chg:-3.21},
+];
+function renderTickerTape(data) {
+  const inner = document.getElementById('tickerInner');
+  const items = (data || FALLBACK_TICKERS);
+  // duplicate for infinite scroll
+  const html = [...items, ...items].map(d => {
+    const cls = d.chg >= 0 ? 'up' : 'down';
+    const sign = d.chg >= 0 ? '+' : '';
+    return `<div class="tick-item">
+      <span class="tick-sym">${d.sym}</span>
+      <span class="tick-price">$${typeof d.price === 'number' ? d.price.toLocaleString() : d.price}</span>
+      <span class="tick-chg ${cls}">${sign}${d.chg.toFixed(2)}%</span>
+    </div>`;
+  }).join('');
+  inner.innerHTML = html;
+}
+
+// ─── Yahoo Finance proxy via allorigins ──────────────────────────────────────
+async function fetchYahooQuote(symbol) {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+    const outer = await res.json();
+    const data = JSON.parse(outer.contents);
+    const result = data?.chart?.result?.[0];
+    if (!result) return null;
+    const closes = result.indicators.quote[0].close.filter(Boolean);
+    if (closes.length < 2) return null;
+    const prev = closes[closes.length - 2];
+    const curr = closes[closes.length - 1];
+    const chg  = ((curr - prev) / prev) * 100;
+    const meta  = result.meta;
+    return {
+      sym:    symbol,
+      name:   meta.shortName || symbol,
+      price:  +curr.toFixed(4),
+      chg:    +chg.toFixed(2),
+      sector: meta.sector || 'N/A',
+      high52: meta.fiftyTwoWeekHigh,
+      low52:  meta.fiftyTwoWeekLow,
+      pe:     meta.trailingPE || 'N/A',
+    };
+  } catch { return null; }
+}
+
+async function fetchAllQuotes(tickers) {
+  const results = await Promise.allSettled(tickers.map(fetchYahooQuote));
+  return results.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean);
+}
+
+// ─── RSS via allorigins ───────────────────────────────────────────────────────
+const RSS_FEEDS = [
+  { name: 'Reuters',     url: 'https://feeds.reuters.com/reuters/businessNews' },
+  { name: 'MarketWatch', url: 'https://feeds.marketwatch.com/marketwatch/topstories' },
+  { name: 'Yahoo Finance',url: 'https://finance.yahoo.com/news/rssindex' },
+  { name: 'CNBC',        url: 'https://www.cnbc.com/id/10000664/device/rss/rss.html' },
+];
+async function fetchRSSFeed(feed, max = 5) {
+  try {
+    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(feed.url)}`;
+    const res = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+    const outer = await res.json();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(outer.contents, 'text/xml');
+    const items = [...doc.querySelectorAll('item')].slice(0, max);
+    return items.map(item => ({
+      source:   feed.name,
+      title:    item.querySelector('title')?.textContent?.trim() || '',
+      summary:  (item.querySelector('description')?.textContent?.trim() || '').replace(/<[^>]+>/g,'').slice(0, 300),
+      link:     item.querySelector('link')?.textContent?.trim() || '',
+      published:item.querySelector('pubDate')?.textContent?.trim() || '',
+    }));
+  } catch { return []; }
+}
+async function fetchAllNews(maxPerFeed = 5) {
+  const results = await Promise.allSettled(RSS_FEEDS.map(f => fetchRSSFeed(f, maxPerFeed)));
+  return results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+}
+
+// ─── Market Indicators ────────────────────────────────────────────────────────
+const INDICATOR_SYMBOLS = {
+  'S&P 500':    '^GSPC',
+  'NASDAQ':     '^IXIC',
+  'DOW':        '^DJI',
+  'VIX':        '^VIX',
+  '10Y Treasury':'^TNX',
+  'Gold':       'GC=F',
+  'Oil (WTI)':  'CL=F',
+  'Bitcoin':    'BTC-USD',
+};
+async function fetchIndicators() {
+  const entries = Object.entries(INDICATOR_SYMBOLS);
+  const results = await Promise.allSettled(entries.map(([n,s]) => fetchYahooQuote(s).then(d => d ? [n,d] : null)));
+  const out = {};
+  results.forEach(r => { if (r.status === 'fulfilled' && r.value) { const [n,d] = r.value; out[n] = d; } });
+  return out;
+}
+
+// ─── Google Gemini API ────────────────────────────────────────────────────────
+async function callClaude(apiKey, headlines, indicators, quotes) {
+  const headlineText = headlines.slice(0,35).map(h => `[${h.source}] ${h.title} — ${h.summary}`).join('\n');
+  const indicatorText = Object.entries(indicators).map(([n,d]) => `${n}: $${d.price} (${d.chg>=0?'+':''}${d.chg}%)`).join('\n');
+  const stockText = quotes.map(q => `${q.sym}: $${q.price} (${q.chg>=0?'+':''}${q.chg}%) | PE ${q.pe} | Sector: ${q.sector}`).join('\n');
+
+  const prompt = `You are a senior quantitative analyst at a top-tier hedge fund.
+
+Analyze this REAL-TIME market data and news to generate actionable trade recommendations.
+
+=== MARKET INDICATORS ===
+${indicatorText || 'Data unavailable'}
+
+=== STOCK DATA ===
+${stockText || 'Data unavailable'}
+
+=== LATEST FINANCIAL NEWS ===
+${headlineText || 'No headlines available'}
+
+Generate exactly 5 trade recommendations. Respond ONLY in this JSON format with no markdown or extra text:
+{
+  "market_sentiment": "2-3 sentence summary of current market conditions",
+  "sentiment_score": <number -100 to 100>,
+  "trades": [
+    {
+      "rank": 1,
+      "action": "BUY|SELL|SHORT|PUT|CALL|HOLD",
+      "ticker": "symbol",
+      "name": "company name",
+      "entry_low": <number>,
+      "entry_high": <number>,
+      "target": <number>,
+      "stop_loss": <number>,
+      "horizon": "day|swing|long-term",
+      "probability": <0-100>,
+      "confidence": "Low|Medium|High",
+      "reasoning": "2-3 sentence thesis citing specific news or indicators",
+      "risk_factors": "1-2 sentence risk warning",
+      "catalysts": ["catalyst1", "catalyst2"]
+    }
+  ],
+  "sector_rotation": {
+    "overweight": ["sector1", "sector2"],
+    "underweight": ["sector1", "sector2"],
+    "rationale": "reason"
+  },
+  "risk_events": ["event1", "event2", "event3"]
+}`;
+
+  const cleanKey = apiKey.trim();
+  if (!cleanKey.startsWith('AIza')) {
+    throw new Error('Key should start with "AIza" — get one free at aistudio.google.com');
+  }
+
+  const genAI = new GoogleGenerativeAI(cleanKey);
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-1.5-flash',
+    systemInstruction: 'You are a senior quantitative analyst at a top-tier hedge fund. Always respond with valid JSON only — no markdown, no extra text, no code fences.',
+  });
+
+  const result = await model.generateContent({
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.3, maxOutputTokens: 3000 },
+  });
+
+  let raw = result.response.text().trim();
+  if (raw.startsWith('```')) raw = raw.replace(/```json?|```/g, '').trim();
+  return JSON.parse(raw);
+}
+
+// ─── Run Scan ─────────────────────────────────────────────────────────────────
+async function runScan() {
+  const { apiKey, tickers, headlines: maxHeadlines } = getSettings();
+
+  if (!apiKey) {
+    openSettings();
+    showToast('⚙ Enter your Gemini API key first');
+    return;
+  }
+
+  const tickerList = tickers.split(',').map(t => t.trim().toUpperCase()).filter(Boolean);
+
+  document.getElementById('scanBtn').disabled = true;
+  document.getElementById('emptyState')?.remove();
+  showLoading();
+
+  try {
+    // Fetch in parallel
+    const [news, indicators, quotes] = await Promise.all([
+      fetchAllNews(maxHeadlines),
+      fetchIndicators(),
+      fetchAllQuotes(tickerList),
+    ]);
+
+    lastNews = news;
+
+    // Update ticker tape
+    const tapeData = quotes.map(q => ({ sym: q.sym, price: q.price, chg: q.chg }));
+    renderTickerTape(tapeData.length ? tapeData : null);
+
+    // Claude analysis
+    const analysis = await callClaude(apiKey, news, indicators, quotes);
+    lastAnalysis = { analysis, indicators, quotes, news, timestamp: new Date().toISOString() };
+
+    // Save to history
+    history.unshift({ ...lastAnalysis, id: Date.now() });
+    if (history.length > 20) history.pop();
+    localStorage.setItem('finIntelHistory', JSON.stringify(history));
+
+    hideLoading();
+    renderAll(analysis, indicators, news);
+    showToast('✅ Scan complete — ' + analysis.trades.length + ' trades generated');
+
+  } catch (err) {
+    hideLoading();
+    showToast('❌ ' + (err.message || 'Scan failed'));
+    console.error(err);
+  } finally {
+    document.getElementById('scanBtn').disabled = false;
+  }
+}
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+function renderAll(analysis, indicators, news) {
+  const main = document.getElementById('mainContent');
+
+  const probClass = p => p >= 65 ? 'high' : p >= 45 ? 'medium' : 'low';
+  const actionCls = a => ['BUY','CALL'].includes(a) ? 'buy' : ['SELL','SHORT','PUT'].includes(a) ? 'sell' : 'hold';
+
+  // Sentiment score
+  const score = analysis.sentiment_score || 0;
+  const sentLabel = score > 50 ? 'Extreme Greed' : score > 15 ? 'Greed' : score > -15 ? 'Neutral' : score > -50 ? 'Fear' : 'Extreme Fear';
+  const sentCls   = score > 15 ? 'greed' : score > -15 ? 'neutral' : 'fear';
+  const thumbPos  = ((score + 100) / 200 * 100).toFixed(1);
+
+  // Indicators grid
+  const indHTML = Object.entries(indicators).map(([name, d]) => {
+    const cls = d.chg >= 0 ? 'up' : 'down';
+    const sign = d.chg >= 0 ? '+' : '';
+    return `<div class="indicator-card">
+      <div class="ind-name">${name}</div>
+      <div class="ind-price">$${d.price.toLocaleString()}</div>
+      <div class="ind-chg ${cls}">${sign}${d.chg}%</div>
+    </div>`;
+  }).join('');
+
+  // Trade cards
+  const tradesHTML = (analysis.trades || []).map(t => {
+    const pcls = probClass(t.probability);
+    const acls = actionCls(t.action);
+    const gain = t.target && t.entry_high ? ((t.target - t.entry_high) / t.entry_high * 100).toFixed(1) : null;
+    const catalysts = (t.catalysts || []).map(c => `<span class="catalyst-tag">${c}</span>`).join('');
+    return `<div class="trade-card">
+      <div class="trade-header">
+        <div class="trade-left">
+          <div class="action-badge ${acls}">${t.action}</div>
+          <div>
+            <div class="trade-ticker">${t.ticker}</div>
+            <div class="trade-name">${t.name || ''}</div>
+          </div>
+        </div>
+        <div class="trade-horizon">${t.horizon || 'swing'}</div>
+      </div>
+      <div class="trade-prices">
+        <div class="price-block">
+          <div class="price-lbl">Entry</div>
+          <div class="price-val entry">$${t.entry_low}–${t.entry_high}</div>
+        </div>
+        <div class="price-block">
+          <div class="price-lbl">Target</div>
+          <div class="price-val target">$${t.target}</div>
+          ${gain ? `<div class="price-gain">+${gain}%</div>` : ''}
+        </div>
+        <div class="price-block">
+          <div class="price-lbl">Stop-Loss</div>
+          <div class="price-val stop">$${t.stop_loss}</div>
+        </div>
+      </div>
+      <div class="trade-prob">
+        <div class="prob-header">
+          <span class="prob-lbl">Success Probability</span>
+          <span class="conf-badge ${t.confidence}">${t.confidence}</span>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;">
+          <span class="prob-num ${pcls}">${t.probability}%</span>
+        </div>
+        <div class="prob-bar-track">
+          <div class="prob-bar-fill ${pcls}" style="width:${t.probability}%"></div>
+        </div>
+      </div>
+      <div class="trade-body">
+        <div class="trade-reasoning">${t.reasoning}</div>
+        <div class="trade-risks">${t.risk_factors}</div>
+        ${catalysts ? `<div class="catalysts">${catalysts}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Sector rotation
+  const sr = analysis.sector_rotation || {};
+  const overTags  = (sr.overweight  || []).map(s => `<span class="sector-tag over">${s}</span>`).join('');
+  const underTags = (sr.underweight || []).map(s => `<span class="sector-tag under">${s}</span>`).join('');
+
+  // Risk events
+  const riskHTML = (analysis.risk_events || []).map(e => `<div class="risk-item">${e}</div>`).join('');
+
+  // News
+  const newsHTML = (news || []).slice(0, 20).map(n => `<div class="news-card">
+    <div class="news-source">${n.source}</div>
+    <div class="news-title">${n.title}</div>
+    ${n.summary ? `<div class="news-summary">${n.summary}</div>` : ''}
+    ${n.published ? `<div class="news-time">${n.published.slice(0,25)}</div>` : ''}
+  </div>`).join('');
+
+  main.innerHTML = `
+    <!-- Trades Page -->
+    <div class="tab-pane active" id="page-trades">
+      <p class="section-label">▸ MARKET INDICATORS</p>
+      <div class="indicators-grid">${indHTML}</div>
+
+      <div class="sentiment-panel">
+        <div class="sentiment-header">
+          <span class="sentiment-title">▸ SENTIMENT GAUGE</span>
+          <span class="sentiment-label ${sentCls}">${sentLabel}</span>
+        </div>
+        <div class="sentiment-track">
+          <div class="sentiment-thumb" id="sentThumb" style="left:${thumbPos}%"></div>
+        </div>
+        <div class="sentiment-text">${analysis.market_sentiment}</div>
+      </div>
+
+      <p class="section-label">▸ AI TRADE RECOMMENDATIONS</p>
+      <div class="trades-list">${tradesHTML}</div>
+
+      <div class="sector-panel">
+        <div class="sector-title">▸ SECTOR ROTATION SIGNAL</div>
+        <div class="sector-row">
+          <div class="sector-group">
+            <div class="sector-group-label">▲ Overweight</div>
+            <div class="sector-tags">${overTags}</div>
+          </div>
+          <div class="sector-group">
+            <div class="sector-group-label">▼ Underweight</div>
+            <div class="sector-tags">${underTags}</div>
+          </div>
+        </div>
+        <div class="sector-rationale">${sr.rationale || ''}</div>
+      </div>
+
+      <div class="risk-panel">
+        <div class="risk-title">▸ KEY RISK EVENTS</div>
+        <div class="risk-list">${riskHTML}</div>
+      </div>
+
+      <div class="disclaimer">
+        ⚠ AI-generated analysis for educational purposes only. Not financial advice.
+        Trading involves substantial risk. Always consult a licensed financial advisor.
+      </div>
+    </div>
+
+    <!-- News Page -->
+    <div class="tab-pane" id="page-news">
+      <p class="section-label">▸ LATEST FINANCIAL NEWS</p>
+      <div class="news-list">${newsHTML || '<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">No News Loaded</div><div class="empty-sub">Run a scan to fetch headlines.</div></div>'}</div>
+    </div>
+
+    <!-- Market Page -->
+    <div class="tab-pane" id="page-market">
+      <p class="section-label">▸ MARKET OVERVIEW</p>
+      <div class="indicators-grid">${indHTML}</div>
+      <div class="sentiment-panel" style="margin-top:8px">
+        <div class="sentiment-header">
+          <span class="sentiment-title">▸ FEAR &amp; GREED INDEX</span>
+          <span class="sentiment-label ${sentCls}">${sentLabel} (${score > 0 ? '+' : ''}${score})</span>
+        </div>
+        <div class="sentiment-track">
+          <div class="sentiment-thumb" style="left:${thumbPos}%"></div>
+        </div>
+        <div class="sentiment-text">${analysis.market_sentiment}</div>
+      </div>
+    </div>
+
+    <!-- History Page -->
+    <div class="tab-pane" id="page-history">
+      <p class="section-label">▸ SCAN HISTORY</p>
+      ${renderHistory()}
+    </div>
+  `;
+
+  showPage(currentPage);
+}
+
+function renderHistory() {
+  if (!history.length) return `<div class="empty-state"><div class="empty-icon">🕐</div><div class="empty-title">No History Yet</div><div class="empty-sub">Your past scans will appear here.</div></div>`;
+  return history.map((h, i) => {
+    const date = new Date(h.timestamp).toLocaleString();
+    const trades = (h.analysis?.trades || []);
+    const top = trades[0];
+    return `<div class="news-card" onclick="loadHistory(${i})">
+      <div class="news-source">${date}</div>
+      <div class="news-title">${top ? `${top.action} ${top.ticker} — ${top.probability}% probability` : 'Scan result'}</div>
+      <div class="news-summary">${h.analysis?.market_sentiment?.slice(0,120) || ''}...</div>
+    </div>`;
+  }).join('');
+}
+
+function loadHistory(i) {
+  const h = history[i];
+  if (h) {
+    lastAnalysis = h;
+    renderAll(h.analysis, h.indicators || {}, h.news || []);
+    showToast('📂 Loaded scan from ' + new Date(h.timestamp).toLocaleTimeString());
+  }
+}
+
+// ─── Navigation ───────────────────────────────────────────────────────────────
+function showPage(page) {
+  currentPage = page;
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const pane = document.getElementById(`page-${page}`);
+  if (pane) pane.classList.add('active');
+  const navItems = document.querySelectorAll('.nav-item');
+  const pageMap = { trades: 0, news: 1, market: 2, history: 3 };
+  if (navItems[pageMap[page]]) navItems[pageMap[page]].classList.add('active');
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+renderTickerTape(null);
+if (!getSettings().apiKey) {
+  setTimeout(() => showToast('⚙ Set your free Gemini API key in Settings'), 1000);
+}
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// Expose functions to global scope (required when using type="module")
+window.openSettings = openSettings;
+window.closeSettings = closeSettings;
+window.saveSettings = saveSettings;
+window.runScan = runScan;
+window.showPage = showPage;
+window.loadHistory = loadHistory;
+</script>
+</body>
+</html>
