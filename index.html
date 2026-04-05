@@ -907,7 +907,7 @@ Generate exactly 5 trade recommendations. Respond ONLY in this JSON format with 
 
   const genAI = new GoogleGenerativeAI(cleanKey);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.0-flash',
     systemInstruction: 'You are a senior quantitative analyst at a top-tier hedge fund. Always respond with valid JSON only — no markdown, no extra text, no code fences.',
   });
 
